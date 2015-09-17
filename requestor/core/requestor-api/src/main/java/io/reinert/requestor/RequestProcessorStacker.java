@@ -1,5 +1,5 @@
 /*
- * Copyright 2014 Danilo Reinert
+ * Copyright 2015 Danilo Reinert
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,29 +15,6 @@
  */
 package io.reinert.requestor;
 
-/**
- * Allows one to modify a HTTP Response Payload.
- *
- * @author Danilo Reinert
- */
-public interface ResponseInterceptorContext extends RequestOrder {
-
-    String getHeader(String header);
-
-    String getContentType();
-
-    int getStatusCode();
-
-    Response.StatusType getStatus();
-
-    Payload getPayload();
-
-    ResponseType getResponseType();
-
-    void setContentType(String mediaType);
-
-    void setPayload(Payload payload);
-
-    void setResponseType(ResponseType responseType);
-
+public interface RequestProcessorStacker {
+    void stackRequestProcessors(StackableProcessingRequest requestOrder);
 }

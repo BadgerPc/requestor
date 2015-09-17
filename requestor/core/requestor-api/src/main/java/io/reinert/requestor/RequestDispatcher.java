@@ -30,11 +30,12 @@ import io.reinert.requestor.auth.Auth;
  */
 public abstract class RequestDispatcher {
 
-    private final ResponseProcessor processor;
+    private final ResponseProcessor responseProcessor;
     private final DeferredFactory deferredFactory;
 
-    public RequestDispatcher(ResponseProcessor processor, DeferredFactory deferredFactory) {
-        this.processor = processor;
+    public RequestDispatcher(ResponseProcessor responseProcessor,
+                             DeferredFactory deferredFactory) {
+        this.responseProcessor = responseProcessor;
         this.deferredFactory = deferredFactory;
     }
 
@@ -142,6 +143,111 @@ public abstract class RequestDispatcher {
     }
 
     /**
+     * Sends the request and return an instance of {@link Promise} expecting a sole result.
+     *
+     * @param request       The built request
+     * @param resultType    The class instance of the expected type in response payload
+     * @param <T>           The expected type in response payload
+     *
+     * @return              The promise for the dispatched request
+     */
+    @SuppressWarnings("unchecked")
+    public <T> Promise<T> dispatch(final MutableRequest request, final Class<T> resultType) {
+        final Deferred<T> deferred = deferredFactory.getDeferred();
+
+        final ProcessingRequest requestOrder = new RootProcessingRequest(request) {
+            @Override
+            public void proceed() {
+                final Auth auth = request.getAuth();
+                auth.setDispatcher(RequestDispatcher.this);
+                // TODO: Remove SerializedRequest
+                auth.auth(new PreparedRequestImpl(RequestDispatcher.this, (SerializedRequest) request, deferred, resultType, null));
+            }
+
+            @Override
+            public void abort(RawResponse response) {
+                evalResponse(request, deferred, resultType, null, response);
+            }
+
+            @Override
+            public void abort(RequestException error) {
+                deferred.reject(error);
+            }
+        };
+
+        // TODO: Serializer ProcessingRequest
+
+
+
+
+
+        requestOrder.proceed();
+
+        return deferred.getPromise();
+    }
+
+    /**
+     * Sends the request and return an instance of {@link Promise} expecting a collection result.
+     *
+     * @param request       The built request
+     * @param resultType    The class instance of the expected type in response payload
+     * @param containerType The class instance of the container type which will hold the values
+     * @param <T>           The expected type in response payload
+     * @param <C>           The collection type to hold the values
+     *
+     * @return              The promise for the dispatched request
+     */
+    @SuppressWarnings("unchecked")
+    public <T, C extends Collection> Promise<Collection<T>> dispatch(MutableRequest request, Class<T> resultType,
+                                                                     Class<C> containerType) {
+        final Deferred<Collection<T>> deferred = deferredFactory.getDeferred();
+
+        final Auth auth = request.getAuth();
+        auth.setDispatcher(this);
+        auth.auth(new PreparedRequestImpl(this, request, deferred, containerType, resultType));
+
+        return deferred.getPromise();
+    }
+
+    /**
+     * Sends the request with the respective callback.
+     *
+     * @param request       The built request
+     * @param resultType    The class instance of the expected type in response payload
+     * @param callback      The callback to be executed when done
+     * @param <T>           The expected type in response payload
+     */
+    @SuppressWarnings("unchecked")
+    public <T> void dispatch(MutableRequest request, Class<T> resultType, Callback<T, Throwable> callback) {
+        final Deferred<T> deferred = new CallbackDeferred<T>(callback);
+
+        final Auth auth = request.getAuth();
+        auth.setDispatcher(this);
+        auth.auth(new PreparedRequestImpl(this, request, deferred, resultType, null));
+    }
+
+    /**
+     * Sends the request and return an instance of {@link Promise} expecting a collection result.
+     *
+     * @param request       The built request
+     * @param resultType    The class instance of the expected type in response payload
+     * @param containerType The class instance of the container type which will hold the values
+     * @param callback      The callback to be executed when done
+     * @param <T>           The expected type in response payload
+     * @param <C>           The collection type to hold the values
+     */
+    @SuppressWarnings("unchecked")
+    public <T, C extends Collection> void dispatch(MutableRequest request, Class<T> resultType,
+                                                   Class<C> containerType,
+                                                   Callback<Collection<T>, Throwable> callback) {
+        final Deferred<Collection<T>> deferred = new CallbackDeferred<Collection<T>>(callback);
+
+        final Auth auth = request.getAuth();
+        auth.setDispatcher(this);
+        auth.auth(new PreparedRequestImpl(this, request, deferred, containerType, resultType));
+    }
+
+    /**
      * Evaluates the response and resolves the deferred.
      * This method must be called by implementations after the response is received.
      *
@@ -161,11 +267,11 @@ public abstract class RequestDispatcher {
         }
 
         if (parametrizedType != null) {
-            processor.process(request, response, parametrizedType, (Class<Collection>) resolveType,
+            responseProcessor.process(request, response, parametrizedType, (Class<Collection>) resolveType,
                     (Deferred<Collection>) deferred);
             return;
         }
 
-        processor.process(request, response, resolveType, deferred);
+        responseProcessor.process(request, response, resolveType, deferred);
     }
 }

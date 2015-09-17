@@ -24,7 +24,7 @@ import io.reinert.requestor.uri.Uri;
  *
  *  @author Danilo Reinert
  */
-public interface RequestFilterContext {
+public interface RequestFilterContext extends RequestOrder {
 
     String getHeader(String name);
 
